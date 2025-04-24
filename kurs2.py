@@ -13,6 +13,9 @@ from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import dash
 from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
+from pptx.dml.color import RGBColor
+from pptx.enum.text import MSO_ANCHOR
+
 
 wikipedia.set_lang("ru")
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -160,47 +163,91 @@ def generate_report(title, intro, sections, conclusion):
     doc.save(filename)
 
 
+def split_text_on_slides(text, max_characters=800):
+    """
+    Разбивает текст на несколько частей, если он превышает заданный лимит по символам.
+    """
+    slides = []
+    while len(text) > max_characters:
+        split_point = text.rfind(" ", 0, max_characters)  # Находим последний пробел в пределах лимита
+        slides.append(text[:split_point].strip())  # Добавляем часть текста
+        text = text[split_point:].strip()  # Оставшийся текст
+    slides.append(text)  # Добавляем последнюю часть текста
+    return slides
+
 def generate_presentation(title, intro, sections, conclusion, image_urls):
     prs = Presentation()
+
+    # Слайд с заголовком
     slide = prs.slides.add_slide(prs.slide_layouts[0])
     slide.shapes.title.text = title
     slide.placeholders[1].text = "Презентация по теме"
 
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    # Введение: разделяем картинку и текст
+    slide = prs.slides.add_slide(prs.slide_layouts[5])  # Используем layout с пустыми полями
     slide.shapes.title.text = "Введение"
-    tf = slide.placeholders[1].text_frame
-    tf.text = intro
+    slide.background.fill.solid()  # Устанавливаем фон слайда
+    slide.background.fill.fore_color.rgb = RGBColor(200, 220, 255)  # Синий оттенок
 
+    # Текст
+    tf = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(5), Inches(5))
+    text_frame = tf.text_frame
+    text_frame.word_wrap = True  # Включаем автоматический перенос текста
+    p = text_frame.add_paragraph()
+    p.text = intro
+    p.font.size = Pt(18)
+    text_frame.text_anchor = MSO_ANCHOR.TOP  # Чтобы текст не сжимался внизу
+
+    # Картинка
+    if image_urls:
+        try:
+            response = requests.get(image_urls[0])
+            if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
+                img_stream = BytesIO(response.content)
+                slide.shapes.add_picture(img_stream, Inches(0.5), Inches(4.5), height=Inches(3), width=Inches(3))
+        except:
+            pass
+
+    # Основная часть
     for i, (sec_title, sec_text) in enumerate(sections):
-        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide = prs.slides.add_slide(prs.slide_layouts[5])  # Слайд с пустыми полями
         slide.shapes.title.text = sec_title
-        bullets = chunk_text_to_bullets(sec_text)
-        tf = slide.placeholders[1].text_frame
-        tf.clear()
-        for bullet in bullets:
-            p = tf.add_paragraph()
-            p.text = bullet
-            p.level = 0
-            p.font.size = Pt(16)
+        slide.background.fill.solid()
+        slide.background.fill.fore_color.rgb = RGBColor(255, 255, 200)  # Светло-желтый фон
+
+        # Текст
+        tf = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(5), Inches(5))
+        text_frame = tf.text_frame
+        text_frame.word_wrap = True  # Включаем автоматический перенос текста
+        p = text_frame.add_paragraph()
+        p.text = sec_text
+        p.font.size = Pt(18)
+        text_frame.text_anchor = MSO_ANCHOR.TOP  # Чтобы текст не сжимался внизу
+
+        # Картинка
         if i < len(image_urls):
             try:
                 response = requests.get(image_urls[i])
                 if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
                     img_stream = BytesIO(response.content)
-                    slide.shapes.add_picture(img_stream, Inches(0.5), Inches(1.5), height=Inches(3.5))
+                    slide.shapes.add_picture(img_stream, Inches(0.5), Inches(4.5), height=Inches(3), width=Inches(3))
             except:
-                continue
+                pass
 
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    # Заключение
+    slide = prs.slides.add_slide(prs.slide_layouts[5])  # Слайд с пустыми полями
     slide.shapes.title.text = "Заключение"
-    bullets = chunk_text_to_bullets(conclusion)
-    tf = slide.placeholders[1].text_frame
-    tf.clear()
-    for bullet in bullets:
-        p = tf.add_paragraph()
-        p.text = bullet
-        p.level = 0
-        p.font.size = Pt(16)
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = RGBColor(255, 230, 230)  # Розовый фон
+
+    # Текст
+    tf = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(5), Inches(5))
+    text_frame = tf.text_frame
+    text_frame.word_wrap = True  # Включаем автоматический перенос текста
+    p = text_frame.add_paragraph()
+    p.text = conclusion
+    p.font.size = Pt(18)
+    text_frame.text_anchor = MSO_ANCHOR.TOP  # Чтобы текст не сжимался внизу
 
     filename = f"{title}_presentation.pptx"
     prs.save(filename)
