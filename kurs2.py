@@ -1,5 +1,6 @@
 import wikipedia
 import re
+import os 
 import json
 import requests
 import urllib.parse
@@ -15,7 +16,7 @@ from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_ANCHOR
-
+from PIL import Image, ImageFilter
 
 wikipedia.set_lang("ru")
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -184,29 +185,44 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
     slide.placeholders[1].text = "Презентация по теме"
 
     # Введение: разделяем картинку и текст
-    slide = prs.slides.add_slide(prs.slide_layouts[5])  # Используем layout с пустыми полями
-    slide.shapes.title.text = "Введение"
-    slide.background.fill.solid()  # Устанавливаем фон слайда
-    slide.background.fill.fore_color.rgb = RGBColor(200, 220, 255)  # Синий оттенок
-
-    # Текст
-    tf = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(5), Inches(5))
-    text_frame = tf.text_frame
-    text_frame.word_wrap = True  # Включаем автоматический перенос текста
-    p = text_frame.add_paragraph()
-    p.text = intro
-    p.font.size = Pt(18)
-    text_frame.text_anchor = MSO_ANCHOR.TOP  # Чтобы текст не сжимался внизу
-
-    # Картинка
+    slide = prs.slides.add_slide(prs.slide_layouts[5])  # Пустой слайд
     if image_urls:
         try:
             response = requests.get(image_urls[0])
             if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
-                img_stream = BytesIO(response.content)
-                slide.shapes.add_picture(img_stream, Inches(0.5), Inches(4.5), height=Inches(3), width=Inches(3))
-        except:
-            pass
+                img = Image.open(BytesIO(response.content))
+                blurred = img.filter(ImageFilter.GaussianBlur(radius=15))  # 🌫 Размытие
+
+                blurred_path = "temp_blurred.jpg"
+                blurred.save(blurred_path)
+
+                slide.shapes.add_picture(
+                    blurred_path, Inches(0), Inches(0),
+                    width=prs.slide_width, height=prs.slide_height
+                )
+        except Exception as e:
+            print(f"⚠ Ошибка загрузки или обработки фона: {e}")
+    
+
+    title_box = slide.shapes.add_textbox(Inches(0), Inches(1), Inches(9), Inches(1.5))
+    tf_title = title_box.text_frame
+    p = tf_title.paragraphs[0]
+    p.text = "Введение"
+    p.font.size = Pt(40)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(255, 255, 255)  # Белый
+    p.alignment = PP_PARAGRAPH_ALIGNMENT.CENTER
+
+# Текст (ввод)
+    intro_box = slide.shapes.add_textbox(Inches(0.5), Inches(2.5), Inches(9), Inches(5))
+    tf_intro = intro_box.text_frame
+    tf_intro.word_wrap = True
+    tf_intro.text_anchor = MSO_ANCHOR.TOP
+    p = tf_intro.add_paragraph()
+    p.text = intro
+    p.font.size = Pt(20)
+    p.font.color.rgb = RGBColor(255, 255, 255)
+    p.line_spacing = 1.3
 
     # Основная часть
     for i, (sec_title, sec_text) in enumerate(sections):
@@ -216,7 +232,7 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
         slide.background.fill.fore_color.rgb = RGBColor(255, 255, 200)  # Светло-желтый фон
 
         # Текст
-        tf = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(5), Inches(5))
+        tf = slide.shapes.add_textbox(Inches(5), Inches(1.5), Inches(5), Inches(8))
         text_frame = tf.text_frame
         text_frame.word_wrap = True  # Включаем автоматический перенос текста
         p = text_frame.add_paragraph()
@@ -230,7 +246,7 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
                 response = requests.get(image_urls[i])
                 if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
                     img_stream = BytesIO(response.content)
-                    slide.shapes.add_picture(img_stream, Inches(0.5), Inches(4.5), height=Inches(3), width=Inches(3))
+                    slide.shapes.add_picture(img_stream, Inches(0.3), Inches(1.5), height=Inches(5), width=Inches(4))
             except:
                 pass
 
@@ -251,6 +267,8 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
 
     filename = f"{title}_presentation.pptx"
     prs.save(filename)
+    if os.path.exists("temp_blurred.jpg"):
+        os.remove("temp_blurred.jpg")
 
 app.layout = dbc.Container([
     html.H2("Автоматический генератор доклада и презентации"),
@@ -281,8 +299,7 @@ app.layout = dbc.Container([
             ),
             html.Label("Слайдов (если презентация):"),
             dcc.Input(id="slides", type="number", value=8, min=5, max=15),
-            html.Label("Картинок в презентации:"),
-            dcc.Input(id="images", type="number", value=4, min=0, max=12),
+           
             html.Br(), html.Br(),
             dbc.Button("Сгенерировать", id="generate", color="primary"),
         ], width=6)
@@ -298,9 +315,8 @@ app.layout = dbc.Container([
     State("mode", "value"),
     State("detail", "value"),
     State("slides", "value"),
-    State("images", "value"),
 )
-def run_generator(n, topic, mode, detail, slides, images):
+def run_generator(n, topic, mode, detail, slides):
     if not n:
         return ""
     text = get_clean_article(topic)
@@ -314,7 +330,7 @@ def run_generator(n, topic, mode, detail, slides, images):
     if mode in ["report", "both"]:
         generate_report(topic, intro, sections, conclusion)
     if mode in ["presentation", "both"]:
-        image_urls = fetch_image_urls_bing(topic, images)
+        image_urls = fetch_image_urls_bing(topic, len(sections))
         generate_presentation(topic, intro, sections, conclusion, image_urls)
 
     return f"✅ Готово! Файлы сохранены: {topic}_report.docx и/или {topic}_presentation.pptx"
