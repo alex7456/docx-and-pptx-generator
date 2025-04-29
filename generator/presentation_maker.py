@@ -5,7 +5,26 @@ from pptx.enum.text import PP_PARAGRAPH_ALIGNMENT, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 from PIL import Image, ImageFilter
 from io import BytesIO
+import re
 import os
+from transformers import pipeline
+
+try:
+    summarizer = pipeline("summarization", model="IlyaGusev/rut5_base_sum_gazeta")
+except:
+    summarizer = None
+
+def summarize_to_bullets(text, max_sentences=4):
+    if summarizer is None:
+        return []
+
+    try:
+        result = summarizer(text, max_length=120, min_length=40, do_sample=False)
+        summary = result[0]['summary_text']
+        bullets = re.split(r'(?<=[.!?])\s+', summary.strip())
+        return bullets[:max_sentences]
+    except:
+        return []
 
 def split_text_on_slides(text, max_characters=800):
     """
@@ -77,11 +96,23 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
         # Текст
         tf = slide.shapes.add_textbox(Inches(5), Inches(1.5), Inches(5), Inches(8))
         text_frame = tf.text_frame
-        text_frame.word_wrap = True  # Включаем автоматический перенос текста
-        p = text_frame.add_paragraph()
-        p.text = sec_text
-        p.font.size = Pt(18)
-        text_frame.text_anchor = MSO_ANCHOR.TOP  # Чтобы текст не сжимался внизу
+        text_frame.word_wrap = True
+        text_frame.text_anchor = MSO_ANCHOR.TOP
+
+        bullets = summarize_to_bullets(sec_text)
+
+        if not bullets:
+            bullets = ["Информация временно недоступна."]
+
+        for sentence in bullets:
+            p = text_frame.add_paragraph()
+            p.text = sentence.strip()
+            p.font.size = Pt(18)
+            p.level = 0
+            p.space_after = Pt(6)
+            p.line_spacing = 1.2
+
+
 
         # Картинка
         if i < len(image_urls):
