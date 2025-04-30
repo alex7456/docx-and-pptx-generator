@@ -8,6 +8,8 @@ from io import BytesIO
 import re
 import os
 from transformers import pipeline
+from generator.summarizer import smart_conclusion_human_style
+
 
 try:
     summarizer = pipeline("summarization", model="IlyaGusev/rut5_base_sum_gazeta")
@@ -131,7 +133,7 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
     slide.background.fill.fore_color.rgb = RGBColor(255, 230, 230)  # Розовый фон
 
     # Текст
-    tf = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(5), Inches(5))
+    tf = slide.shapes.add_textbox(Inches(0.5), Inches(2.5), Inches(9), Inches(5))
     text_frame = tf.text_frame
     text_frame.word_wrap = True  # Включаем автоматический перенос текста
     p = text_frame.add_paragraph()
