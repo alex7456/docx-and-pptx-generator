@@ -41,12 +41,19 @@ def split_text_on_slides(text, max_characters=800):
     return slides
 
 def generate_presentation(title, intro, sections, conclusion, image_urls):
-    prs = Presentation()
+    template_path = "base_template.pptx"
+    prs = Presentation(template_path) if os.path.exists(template_path) else Presentation()
+
 
     # Слайд с заголовком
-    slide = prs.slides.add_slide(prs.slide_layouts[0])
+    slide = prs.slides.add_slide(prs.slide_layouts[2])
     slide.shapes.title.text = title
     slide.placeholders[1].text = "Презентация по теме"
+    fill = slide.background.fill
+    fill.gradient()
+    fill.gradient_stops[0].color.rgb = RGBColor(180, 180, 180)  # светло-серый
+    fill.gradient_stops[1].color.rgb = RGBColor(100, 100, 100)  # тёмно-серый
+    fill.gradient_angle = 90  # по горизонтали (слева направо)
 
     # Введение: разделяем картинку и текст
     slide = prs.slides.add_slide(prs.slide_layouts[5])  # Пустой слайд
@@ -93,19 +100,20 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
         slide = prs.slides.add_slide(prs.slide_layouts[5])  # Слайд с пустыми полями
         slide.shapes.title.text = sec_title
         slide.background.fill.solid()
-        slide.background.fill.fore_color.rgb = RGBColor(255, 255, 200)  # Светло-желтый фон
+        slide.background.fill.fore_color.rgb = RGBColor(202, 207, 204)  # Светло-желтый фон
 
         # Текст
         tf = slide.shapes.add_textbox(Inches(5), Inches(1.5), Inches(5), Inches(8))
         text_frame = tf.text_frame
         text_frame.word_wrap = True
         text_frame.text_anchor = MSO_ANCHOR.TOP
+        text_frame.clear()
 
         bullets = summarize_to_bullets(sec_text)
 
         if not bullets:
             bullets = ["Информация временно недоступна."]
-
+           
         for sentence in bullets:
             p = text_frame.add_paragraph()
             p.text = sentence.strip()
@@ -129,9 +137,11 @@ def generate_presentation(title, intro, sections, conclusion, image_urls):
     # Заключение
     slide = prs.slides.add_slide(prs.slide_layouts[5])  # Слайд с пустыми полями
     slide.shapes.title.text = "Заключение"
-    slide.background.fill.solid()
-    slide.background.fill.fore_color.rgb = RGBColor(255, 230, 230)  # Розовый фон
-
+    fill = slide.background.fill
+    fill.gradient()
+    fill.gradient_stops[0].color.rgb = RGBColor(180, 180, 180)  # светло-серый
+    fill.gradient_stops[1].color.rgb = RGBColor(100, 100, 100)  # тёмно-серый
+    fill.gradient_angle = 90  # по горизонтали (слева направо)
     # Текст
     tf = slide.shapes.add_textbox(Inches(0.5), Inches(2.5), Inches(9), Inches(5))
     text_frame = tf.text_frame
