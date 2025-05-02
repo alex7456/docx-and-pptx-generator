@@ -6,11 +6,16 @@ from generator.image_fetcher import fetch_image_urls_bing
 from generator.report_maker import generate_report
 from generator.presentation_maker import generate_presentation
 from generator.summarizer import smart_conclusion_human_style
+from flask import send_from_directory
+import os
 
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 server = app.server
-
+DOWNLOAD_DIR = os.getcwd()
+@server.route("/download/<path:filename>")
+def download_file(filename):
+    return send_from_directory(DOWNLOAD_DIR, filename, as_attachment=True)
 app.layout = dbc.Container([
     html.Br(),
     dbc.Row([
@@ -113,13 +118,24 @@ def run_generator(n, topic, mode, detail, slides):
     intro = text[:400]
     sections = split_into_sections(text, slides - 3)
     conclusion = smart_conclusion_human_style(topic, sections)
+    buttons = []
+
     if mode in ["report", "both"]:
         generate_report(topic, intro, sections, conclusion)
+        buttons.append(
+            dbc.Button("📄 Скачать доклад (.docx)", href=f"/download/{topic}_report.docx", color="secondary", className="me-2", target="_blank")
+        )
+
     if mode in ["presentation", "both"]:
         image_urls = fetch_image_urls_bing(topic, len(sections))
         generate_presentation(topic, intro, sections, conclusion, image_urls)
+        buttons.append(
+            dbc.Button("📊 Скачать презентацию (.pptx)", href=f"/download/{topic}_presentation.pptx", color="info", target="_blank")
+        )
 
-    return f"✅ Готово! Файлы сохранены: {topic}_report.docx и/или {topic}_presentation.pptx", True
+    return dbc.ButtonGroup(buttons, className="mt-3"), True
+
+
 
 
 if __name__ == "__main__":
